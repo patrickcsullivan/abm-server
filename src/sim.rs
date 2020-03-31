@@ -57,20 +57,41 @@ async fn step(
     channels: Arc<Mutex<channel::Manager>>,
 ) -> Result<(), String> {
     // Mock some simulation logic.
-    delay_for(Duration::from_millis(5000)).await;
+    delay_for(Duration::from_millis(15)).await;
     state.counter = state.counter + 1;
     println!("New state: {}", state.counter);
 
     // Send updates to interested client handlers.
     let channels = channels.lock().unwrap();
-    let interests = client_interests.lock().unwrap();
-    for (addr, _) in interests.iter() {
+    // let interests = client_interests.lock().unwrap();
+    for (addr, region) in client_interests.lock().unwrap().iter() {
         // TODO: Use region to determine what updates to send.
+
         let msg = channel::ClientHandlerMsg {
-            cell_updates: vec![],
+            cell_updates: mock_cell_updates(state.counter, &region),
         };
         channels.send_to_client_handler(&addr, msg);
     }
 
     Ok(())
+}
+
+fn mock_cell_updates(counter: i32, region: &BoundingBox) -> Vec<channel::CellUpdate> {
+    let x_min = std::cmp::max(region.x_min as i32, 0);
+    let x_max = region.x_max as i32;
+    let y_min = std::cmp::max(region.y_min as i32, 0);
+    let y_max = region.y_max as i32;
+
+    let mut updates = vec![];
+    for x in x_min..x_max {
+        for y in y_min..y_max {
+            let grass = (((x + y) / 10) + (counter / 250)) % 5;
+            updates.push(channel::CellUpdate {
+                x: x,
+                y: y,
+                grass: grass,
+            });
+        }
+    }
+    updates
 }

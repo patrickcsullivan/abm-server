@@ -1,3 +1,5 @@
+mod grid;
+
 use super::channel;
 use super::geometry::BoundingBox;
 use futures_channel::mpsc::unbounded;

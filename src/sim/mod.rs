@@ -65,10 +65,7 @@ async fn step(
 
     // Send updates to interested client handlers.
     let channels = channels.lock().unwrap();
-    // let interests = client_interests.lock().unwrap();
     for (addr, region) in client_interests.lock().unwrap().iter() {
-        // TODO: Use region to determine what updates to send.
-
         let msg = channel::ClientHandlerMsg {
             cell_updates: mock_cell_updates(state.counter, &region),
         };

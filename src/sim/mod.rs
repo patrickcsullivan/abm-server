@@ -4,19 +4,66 @@ use super::channel;
 use super::geometry::BoundingBox;
 use futures_channel::mpsc::unbounded;
 use futures_util::{future, pin_mut, stream::StreamExt};
+use grid::Grid;
+use specs::prelude::*;
 use std::{
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::time::delay_for;
 
-struct State {
-    counter: i32,
+type ClientInterests = HashMap<SocketAddr, BoundingBox>;
+
+struct State<'a, 'b> {
+    world: World,
+    dispatcher: Dispatcher<'a, 'b>,
+    last_update: Instant, // TODO: Consider making an ECS resource if systems need to use it.
 }
 
-type ClientInterests = HashMap<SocketAddr, BoundingBox>;
+type Grass = u8;
+
+struct GrowGrass;
+
+impl<'a> System<'a> for GrowGrass {
+    type SystemData = WriteExpect<'a, Grid<Grass>>;
+
+    fn run(&mut self, data: Self::SystemData) {
+        let mut grass_grid = data;
+        for (x, y) in grass_grid.all_positions() {
+            // TODO: This is gross. Figure out how to work with the borrow checker.
+            let mut g = 0;
+            {
+                g = grass_grid.unsafe_at(x, y).to_owned();
+            }
+            grass_grid.set(x, y, (g + 1) % 5);
+        }
+    }
+}
+
+impl State<'_, '_> {
+    pub fn new(x: u8, y: u8) -> Self {
+        let mut world = World::new();
+        // TODO: Register components.
+
+        // Set up dispatcher and systems.
+        let mut dispatcher = DispatcherBuilder::new()
+            .with(GrowGrass, "grow_grass", &[])
+            .build();
+        dispatcher.setup(&mut world);
+
+        // Load resources and entities.
+        let grass_grid: Grid<Grass> = Grid::new(x, y, 0);
+        world.insert(grass_grid);
+
+        State {
+            world: world,
+            dispatcher: dispatcher,
+            last_update: Instant::now(),
+        }
+    }
+}
 
 /// Runs the simulation.
 pub async fn run(channels: Arc<Mutex<channel::Manager>>) -> Result<(), String> {
@@ -32,9 +79,10 @@ pub async fn run(channels: Arc<Mutex<channel::Manager>>) -> Result<(), String> {
         receiver.for_each(|msg| handle_channel_msg(msg, client_interests.clone()));
 
     // Run the simulation loop.
-    let mut state = State { counter: 0 };
+    let mut state = State::new(64, 64);
     let sim_loop = async {
-        while let Ok(()) = step(&mut state, client_interests.clone(), channels.clone()).await {}
+        while let Ok(()) = loop_step(&mut state, client_interests.clone(), channels.clone()).await {
+        }
     };
 
     pin_mut!(handle_receiver, sim_loop);
@@ -53,21 +101,47 @@ async fn handle_channel_msg(
 }
 
 /// Runs a single step of the simulation.
-async fn step(
-    state: &mut State,
+async fn loop_step(
+    state: &mut State<'_, '_>,
     client_interests: Arc<Mutex<ClientInterests>>,
     channels: Arc<Mutex<channel::Manager>>,
 ) -> Result<(), String> {
-    // Mock some simulation logic.
+    // // Wait until a second has passed since last update.
+    // let since_update = state.last_update.elapsed();
+    // let wait_time: Duration = std::cmp::max(
+    //     Duration::from_secs(0),
+    //     Duration::from_secs(1) - since_update,
+    // );
+
+    //
     delay_for(Duration::from_millis(15)).await;
-    state.counter = state.counter + 1;
-    println!("New state: {}", state.counter);
+    if state.last_update.elapsed() >= Duration::from_secs(1) {
+        state.dispatcher.dispatch(&state.world);
+        state.world.maintain();
+        state.last_update = Instant::now();
+    }
 
     // Send updates to interested client handlers.
     let channels = channels.lock().unwrap();
     for (addr, region) in client_interests.lock().unwrap().iter() {
+        let updates: Vec<channel::CellUpdate> = state
+            .world
+            .fetch::<Grid<Grass>>()
+            .within(
+                from_f32(region.x_min),
+                from_f32(region.x_max),
+                from_f32(region.y_min),
+                from_f32(region.y_max),
+            )
+            .iter()
+            .map(|(x, y, g)| channel::CellUpdate {
+                x: i32::from(*x),
+                y: i32::from(*y),
+                grass: i32::from(*g.to_owned()),
+            })
+            .collect();
         let msg = channel::ClientHandlerMsg {
-            cell_updates: mock_cell_updates(state.counter, &region),
+            cell_updates: updates,
         };
         channels.send_to_client_handler(&addr, msg);
     }
@@ -75,22 +149,12 @@ async fn step(
     Ok(())
 }
 
-fn mock_cell_updates(counter: i32, region: &BoundingBox) -> Vec<channel::CellUpdate> {
-    let x_min = std::cmp::max(region.x_min as i32, 0);
-    let x_max = region.x_max as i32;
-    let y_min = std::cmp::max(region.y_min as i32, 0);
-    let y_max = region.y_max as i32;
-
-    let mut updates = vec![];
-    for x in x_min..x_max {
-        for y in y_min..y_max {
-            let grass = (((x + y) / 10) + (counter / 250)) % 5;
-            updates.push(channel::CellUpdate {
-                x: x,
-                y: y,
-                grass: grass,
-            });
-        }
+fn from_f32(x: f32) -> u8 {
+    if x < 0.0 {
+        0
+    } else if x > 255.0 {
+        255
+    } else {
+        x as u8
     }
-    updates
 }

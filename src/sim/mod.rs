@@ -1,3 +1,4 @@
+mod component;
 mod grid;
 
 use super::channel;
@@ -22,22 +23,24 @@ struct State<'a, 'b> {
     last_update: Instant, // TODO: Consider making an ECS resource if systems need to use it.
 }
 
-type Grass = u8;
+struct GrassGrid(pub Grid<u8>);
+
+struct OccupiedGrid(pub Grid<bool>);
 
 struct GrowGrass;
 
 impl<'a> System<'a> for GrowGrass {
-    type SystemData = WriteExpect<'a, Grid<Grass>>;
+    type SystemData = WriteExpect<'a, GrassGrid>;
 
     fn run(&mut self, data: Self::SystemData) {
         let mut grass_grid = data;
-        for (x, y) in grass_grid.all_positions() {
-            // TODO: This is gross. Figure out how to work with the borrow checker.
-            let mut g = 0;
-            {
-                g = grass_grid.unsafe_at(x, y).to_owned();
-            }
-            grass_grid.set(x, y, (g + 1) % 5);
+        for (x, y) in grass_grid.0.all_positions() {
+            // // TODO: This is gross. Figure out how to work with the borrow checker.
+            // let mut g = 0;
+            // {
+            //     g = grass_grid.unsafe_at(x, y).to_owned();
+            // }
+            grass_grid.0.set(x, y, 0);
         }
     }
 }
@@ -45,7 +48,12 @@ impl<'a> System<'a> for GrowGrass {
 impl State<'_, '_> {
     pub fn new(x: u8, y: u8) -> Self {
         let mut world = World::new();
-        // TODO: Register components.
+
+        // Register components.
+        world.register::<component::Pos>();
+        world.register::<component::Food>();
+        world.register::<component::Metabolism>();
+        world.register::<component::Vision>();
 
         // Set up dispatcher and systems.
         let mut dispatcher = DispatcherBuilder::new()
@@ -54,7 +62,28 @@ impl State<'_, '_> {
         dispatcher.setup(&mut world);
 
         // Load resources and entities.
-        let grass_grid: Grid<Grass> = Grid::new(x, y, 0);
+
+        // Mock occupied cells and agents.
+        let mut occupied_grid = OccupiedGrid(Grid::new(x, y, false));
+        occupied_grid.0.set_within(56, 63, 0, 7, true);
+        occupied_grid.0.set_within(0, 7, 56, 63, true);
+        for (x, y) in occupied_grid
+            .0
+            .all()
+            .iter()
+            .filter(|(_, _, is_occ)| **is_occ)
+            .map(|(x, y, _)| (*x, *y))
+        {
+            world
+                .create_entity()
+                .with(component::Pos { x: x, y: y })
+                .with(component::Food(3)) // TODO: Randomize
+                .with(component::Metabolism(2)) // TODO: Randomize
+                .with(component::Vision(5)) // TODO: Randomize
+                .build();
+        }
+
+        let grass_grid = GrassGrid(Grid::new(x, y, 4));
         world.insert(grass_grid);
 
         State {
@@ -126,7 +155,8 @@ async fn loop_step(
     for (addr, region) in client_interests.lock().unwrap().iter() {
         let updates: Vec<channel::CellUpdate> = state
             .world
-            .fetch::<Grid<Grass>>()
+            .fetch::<GrassGrid>()
+            .0
             .within(
                 from_f32(region.x_min),
                 from_f32(region.x_max),

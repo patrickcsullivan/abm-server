@@ -20,6 +20,12 @@ impl<T: Clone + Copy> Grid<T> {
         self.cells[idx] = val;
     }
 
+    pub fn set_within(&mut self, x_min: u8, x_max: u8, y_min: u8, y_max: u8, val: T) -> () {
+        for (x, y) in self.within_positions(x_min, x_max, y_min, y_max).iter() {
+            self.set(*x, *y, val);
+        }
+    }
+
     pub fn at(&self, x: u8, y: u8) -> Option<&T> {
         self.cells.get(self.xy_idx(x, y))
     }
@@ -34,7 +40,7 @@ impl<T: Clone + Copy> Grid<T> {
     pub fn within(&self, x_min: u8, x_max: u8, y_min: u8, y_max: u8) -> Vec<(u8, u8, &T)> {
         self.within_positions(x_min, x_max, y_min, y_max)
             .iter()
-            .map(|(ax, ay)| (*ax, *ay, self.unsafe_at(*ax, *ay)))
+            .map(|(x, y)| (*x, *y, self.unsafe_at(*x, *y)))
             .collect()
     }
 

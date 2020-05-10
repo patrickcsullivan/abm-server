@@ -1,7 +1,9 @@
+pub mod channel;
 mod error;
 mod message;
 
-use super::channel;
+pub use message::{IncomingMessage, OutgoingMessage};
+
 use error::NetworkResult;
 use futures::sink::SinkExt;
 use futures_channel::mpsc::unbounded;
@@ -33,7 +35,8 @@ async fn handle_connection(
     addr: SocketAddr,
 ) -> NetworkResult<()> {
     println!("Incoming TCP connection from: {}", addr);
-    // TODO: Include error message: "Error during the websocket handshake occurred."
+    // TODO: Include error message: "Error during the websocket handshake
+    // occurred."
     let ws_stream = tokio_tungstenite::accept_async(raw_stream).await?;
     println!("WebSocket connection established: {}", addr);
 
@@ -44,30 +47,26 @@ async fn handle_connection(
     let (ws_out, ws_in) = ws_stream.split();
 
     // Handle each incoming WS message by sending a message on the sim channel.
-    let ws_to_sim = ws_in.try_for_each(|ws_msg| {
+    let handle_incoming_messages = ws_in.try_for_each(|ws_msg| {
         println!(
             "Received a message from {}: {}",
             addr,
             ws_msg.to_text().unwrap()
         );
-        if let Ok(from_client) = message::IncomingMessage::try_from(ws_msg) {
-            let message::IncomingMessage::RegisterInterest(region) = from_client;
-            let channel_msg = channel::SimMsg::RegisterInterest(addr, region);
-            channels.lock().unwrap().send_to_sim(channel_msg);
+        if let Ok(incoming_msg) = message::IncomingMessage::try_new(addr, ws_msg) {
+            channels.lock().unwrap().send_to_sim(incoming_msg);
         }
         future::ok(())
     });
 
-    // Forward messages recieved on this handler's channel to the outgoing WS stream.
-    let channel_to_ws = receiver
-        .map(|channel_msg| {
-            let to_client = message::OutgoingMessage::from(channel_msg);
-            Message::try_from(to_client)
-        })
+    // Forward messages recieved on this handler's channel to the outgoing WS
+    // stream.
+    let handle_outgoing_messages = receiver
+        .map(Message::try_from)
         .forward(ws_out.sink_err_into());
 
-    pin_mut!(ws_to_sim, channel_to_ws);
-    future::select(ws_to_sim, channel_to_ws).await;
+    pin_mut!(handle_incoming_messages, handle_outgoing_messages);
+    future::select(handle_incoming_messages, handle_outgoing_messages).await;
 
     // Client is disconnected so remove it from the clients.
     println!("{} disconnected", &addr);

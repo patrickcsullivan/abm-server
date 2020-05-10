@@ -13,8 +13,8 @@ pub trait Grid {
     fn set(&mut self, pos: (usize, usize), t: Self::Cell);
 
     /// Creates an iterator which yields "visible" cells within a specified
-    /// Manhattan distance that satisfy the given predicate. Cells are ordered by
-    /// ascending Manhattan distance and then clockwise order starting from
+    /// Manhattan distance that satisfy the given predicate. Cells are ordered
+    /// by ascending Manhattan distance and then clockwise order starting from
     /// the bottom left cell.
     fn visible_neighbors<P>(
         &self,
@@ -31,8 +31,8 @@ pub trait Grid {
 
     /// Creates an iterator which yields cells within a specified Manhattan
     /// distance that satisfy the given predicate. Cells are ordered by
-    /// ascending Manhattan distance and then clockwise order starting from
-    /// the bottom left cell.
+    /// ascending Manhattan distance and then clockwise order starting from the
+    /// bottom left cell.
     fn neighbors<P>(
         &self,
         pos: (usize, usize),
@@ -110,7 +110,8 @@ where
             if let Some(pos) = search_ring::idx_pos(idx, self.center, self.curr_dist) {
                 if let Some(cell) = self.grid.at(pos) {
                     if (self.predicate)(pos, cell) {
-                        // Mark cell as matched so it blocks cells in outer shells.
+                        // Mark cell as matched so it blocks cells in outer
+                        // shells.
                         self.matches.push(idx);
                         return Some((pos, cell.to_owned()));
                     }

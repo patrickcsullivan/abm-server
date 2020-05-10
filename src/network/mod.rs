@@ -18,7 +18,7 @@ use tungstenite::protocol::Message;
 pub async fn handle_connections(
     listener: &mut TcpListener,
     channels: Arc<Mutex<channel::Manager>>,
-) -> () {
+) {
     while let Ok((stream, addr)) = listener.accept().await {
         // Spawn separate task for handing each connection.
         tokio::spawn(handle_connection(channels.clone(), stream, addr));

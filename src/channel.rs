@@ -25,37 +25,37 @@ pub struct CellUpdate {
 
 impl Manager {
     pub fn new() -> Manager {
-        return Manager {
+        Manager {
             sim: None,
             client_handlers: HashMap::new(),
-        };
+        }
     }
 
     pub fn insert_client_handler(
         &mut self,
         addr: SocketAddr,
         sender: UnboundedSender<ClientHandlerMsg>,
-    ) -> () {
+    ) {
         self.client_handlers.insert(addr, sender);
     }
 
-    pub fn insert_sim(&mut self, sender: UnboundedSender<SimMsg>) -> () {
+    pub fn insert_sim(&mut self, sender: UnboundedSender<SimMsg>) {
         self.sim = Some(sender);
     }
 
-    pub fn remove_client_handler(&mut self, addr: &SocketAddr) -> () {
+    pub fn remove_client_handler(&mut self, addr: &SocketAddr) {
         self.client_handlers.remove(&addr);
     }
 
     /// Attempts to send a message to the simulation's channel.
-    pub fn send_to_sim(&self, msg: SimMsg) -> () {
+    pub fn send_to_sim(&self, msg: SimMsg) {
         if let Some(sender) = &self.sim {
             let _ = sender.unbounded_send(msg);
         }
     }
 
     /// Attempts to send a message to a client handler's channel.
-    pub fn send_to_client_handler(&self, addr: &SocketAddr, msg: ClientHandlerMsg) -> () {
+    pub fn send_to_client_handler(&self, addr: &SocketAddr, msg: ClientHandlerMsg) {
         if let Some(sender) = &self.client_handlers.get(addr) {
             let _ = sender.unbounded_send(msg);
         }

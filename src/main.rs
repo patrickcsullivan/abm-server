@@ -12,9 +12,9 @@
 //! messages.
 
 mod channel;
-mod client;
 mod geometry;
-mod sim;
+mod network;
+mod simulation;
 
 use futures_util::{future, pin_mut};
 use std::{
@@ -39,8 +39,8 @@ async fn main() -> Result<(), IoError> {
     println!("Listening on: {}", addr);
 
     // Run the connection handlers and simulation asynchronously.
-    let handlers = client::handle_connections(&mut listener, channels.clone());
-    let simulation = sim::run(channels.clone());
+    let handlers = network::handle_connections(&mut listener, channels.clone());
+    let simulation = simulation::run(channels.clone());
     pin_mut!(handlers, simulation);
     future::select(handlers, simulation).await;
 

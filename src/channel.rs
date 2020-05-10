@@ -4,9 +4,17 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use futures_channel::mpsc::UnboundedSender;
 
-pub struct Manager {
-    sim: Option<UnboundedSender<SimMsg>>,
-    client_handlers: HashMap<SocketAddr, UnboundedSender<ClientHandlerMsg>>,
+/// Contains the sender end of a channel for messages to the simulation and the
+/// sender ends of channels for messages to connected clients.
+pub struct SenderManager {
+    /// The sender end of a channel that the server will listen to for incoming
+    /// messages. Messages sent on this channel will be sent to the simulation.
+    sim_sender: Option<UnboundedSender<SimMsg>>,
+
+    /// Contains the sender end of a channel for each client connected to the
+    /// server. Messages sent on one of these channels will be forwarded to the
+    /// connection on the respective socket.
+    client_senders: HashMap<SocketAddr, UnboundedSender<ClientHandlerMsg>>,
 }
 
 pub enum SimMsg {
@@ -23,40 +31,40 @@ pub struct CellUpdate {
     pub grass: i32,
 }
 
-impl Manager {
-    pub fn new() -> Manager {
-        Manager {
-            sim: None,
-            client_handlers: HashMap::new(),
+impl SenderManager {
+    pub fn new() -> SenderManager {
+        SenderManager {
+            sim_sender: None,
+            client_senders: HashMap::new(),
         }
     }
 
-    pub fn insert_client_handler(
+    pub fn insert_client_sender(
         &mut self,
         addr: SocketAddr,
         sender: UnboundedSender<ClientHandlerMsg>,
     ) {
-        self.client_handlers.insert(addr, sender);
+        self.client_senders.insert(addr, sender);
     }
 
-    pub fn insert_sim(&mut self, sender: UnboundedSender<SimMsg>) {
-        self.sim = Some(sender);
+    pub fn insert_sim_sender(&mut self, sender: UnboundedSender<SimMsg>) {
+        self.sim_sender = Some(sender);
     }
 
-    pub fn remove_client_handler(&mut self, addr: &SocketAddr) {
-        self.client_handlers.remove(&addr);
+    pub fn remove_client_sender(&mut self, addr: &SocketAddr) {
+        self.client_senders.remove(&addr);
     }
 
-    /// Attempts to send a message to the simulation's channel.
+    /// Attempts to send a message on the simulation's channel.
     pub fn send_to_sim(&self, msg: SimMsg) {
-        if let Some(sender) = &self.sim {
+        if let Some(sender) = &self.sim_sender {
             let _ = sender.unbounded_send(msg);
         }
     }
 
-    /// Attempts to send a message to a client handler's channel.
-    pub fn send_to_client_handler(&self, addr: &SocketAddr, msg: ClientHandlerMsg) {
-        if let Some(sender) = &self.client_handlers.get(addr) {
+    /// Attempts to send a message on the client's channel channel.
+    pub fn send_to_client(&self, addr: &SocketAddr, msg: ClientHandlerMsg) {
+        if let Some(sender) = &self.client_senders.get(addr) {
             let _ = sender.unbounded_send(msg);
         }
     }

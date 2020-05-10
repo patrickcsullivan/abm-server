@@ -30,7 +30,7 @@ async fn main() -> Result<(), IoError> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
-    let channels = Arc::new(Mutex::new(channel::Manager::new()));
+    let channels = Arc::new(Mutex::new(channel::SenderManager::new()));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
@@ -39,7 +39,7 @@ async fn main() -> Result<(), IoError> {
     println!("Listening on: {}", addr);
 
     // Run the connection handlers and simulation asynchronously.
-    let handlers = network::handle_connections(&mut listener, channels.clone());
+    let handlers = network::accept_connections(&mut listener, channels.clone());
     let simulation = simulation::run(channels.clone());
     pin_mut!(handlers, simulation);
     future::select(handlers, simulation).await;

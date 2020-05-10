@@ -102,10 +102,10 @@ impl State<'_, '_> {
 type ClientInterests = HashMap<SocketAddr, BoundingBox>;
 
 /// Runs the simulation.
-pub async fn run(channels: Arc<Mutex<channel::Manager>>) -> Result<(), String> {
+pub async fn run(channels: Arc<Mutex<channel::SenderManager>>) -> Result<(), String> {
     // Insert the sender part of this channel into the channel manager.
     let (sender, receiver) = unbounded();
-    channels.lock().unwrap().insert_sim(sender);
+    channels.lock().unwrap().insert_sim_sender(sender);
 
     // Keep track of clients' registered areas of interest.
     let client_interests = Arc::new(Mutex::new(HashMap::new()));
@@ -136,7 +136,7 @@ async fn handle_channel_msg(msg: channel::SimMsg, client_interests: Arc<Mutex<Cl
 async fn step(
     state: &mut State<'_, '_>,
     client_interests: Arc<Mutex<ClientInterests>>,
-    channels: Arc<Mutex<channel::Manager>>,
+    channels: Arc<Mutex<channel::SenderManager>>,
 ) -> Result<(), String> {
     // Update the frame counter.
     if let Some(frame) = state.frame {
@@ -167,7 +167,7 @@ async fn step(
     //     let msg = channel::ClientHandlerMsg {
     //         cell_updates: vec![],
     //     };
-    //     channels.send_to_client_handler(&addr, msg);
+    //     channels. send_to_client(&addr, msg);
     // }
 
     Ok(())

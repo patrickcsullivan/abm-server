@@ -2,32 +2,32 @@ use serde_json;
 use std::{convert::From, fmt};
 use tungstenite;
 
-pub type ClientResult<T> = Result<T, ClientError>;
+pub type NetworkResult<T> = Result<T, NetworkError>;
 
 #[derive(Debug)]
-pub enum ClientError {
+pub enum NetworkError {
     Serde(serde_json::Error),
     Tungstenite(tungstenite::error::Error),
 }
 
-impl fmt::Display for ClientError {
+impl fmt::Display for NetworkError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             // Use the underlying implementations of `Display`.
-            ClientError::Serde(ref err) => write!(f, "Serde error: {}", err),
-            ClientError::Tungstenite(ref err) => write!(f, "Tungstenite error: {}", err),
+            NetworkError::Serde(ref err) => write!(f, "Serde error: {}", err),
+            NetworkError::Tungstenite(ref err) => write!(f, "Tungstenite error: {}", err),
         }
     }
 }
 
-impl From<serde_json::Error> for ClientError {
-    fn from(err: serde_json::Error) -> ClientError {
-        ClientError::Serde(err)
+impl From<serde_json::Error> for NetworkError {
+    fn from(err: serde_json::Error) -> NetworkError {
+        NetworkError::Serde(err)
     }
 }
 
-impl From<tungstenite::error::Error> for ClientError {
-    fn from(err: tungstenite::error::Error) -> ClientError {
-        ClientError::Tungstenite(err)
+impl From<tungstenite::error::Error> for NetworkError {
+    fn from(err: tungstenite::error::Error) -> NetworkError {
+        NetworkError::Tungstenite(err)
     }
 }

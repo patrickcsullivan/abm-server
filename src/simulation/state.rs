@@ -33,16 +33,20 @@ impl State<'_, '_> {
         // Set up dispatcher and systems.
         let mut dispatcher = DispatcherBuilder::new()
             .with(system::DebugLogSystem, "debug_log", &[])
+            // Process messages from inbox.
+            .with(system::CreateSocketSystem, "create_port", &["debug_log"])
+            // Take snapshots.
             .with(
                 system::ResetAllSheepSnapshotSystem,
                 "reset_all_sheep_snapshot",
-                &["debug_log"],
+                &["create_port"],
             )
             .with(
                 system::AllSheepSnapshotSystem,
                 "all_sheep_snapshot",
                 &["reset_all_sheep_snapshot"],
             )
+            // Update components.
             .with(
                 system::SheepHeadingSystem,
                 "sheep_heading",
@@ -54,7 +58,10 @@ impl State<'_, '_> {
                 &["sheep_heading"],
             )
             .with(system::PositionSystem, "position", &["sheep_velocity"])
-            .with(system::CreateCommandSystem, "create_command", &["position"])
+            // Send messages to outbox.
+            .with(system::OutboxSystem, "outbox", &["position"])
+            // Execute commands to create adnd delete entities.
+            .with(system::CreateCommandSystem, "create_command", &["outbox"])
             .build();
         dispatcher.setup(&mut world);
 

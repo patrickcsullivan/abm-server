@@ -16,18 +16,6 @@ use std::{
 use tokio::net::{TcpListener, TcpStream};
 use tungstenite::protocol::Message;
 
-/// Returns a future thant accepts each new connection from the TCP listener in
-/// a separate task.
-pub async fn accept_connections(
-    listener: &mut TcpListener,
-    channels: Arc<Mutex<channel::SenderManager>>,
-) {
-    while let Ok((stream, addr)) = listener.accept().await {
-        // Spawn separate task for handing each connection.
-        tokio::spawn(handle_connection(channels.clone(), stream, addr));
-    }
-}
-
 /// Handles a TCP connection by attempting to establish a WebSocket connection.
 async fn handle_connection(
     channels: Arc<Mutex<channel::SenderManager>>,
@@ -73,4 +61,16 @@ async fn handle_connection(
     channels.lock().unwrap().remove_client_sender(&addr);
 
     Ok(())
+}
+
+/// Returns a future thant accepts each new connection from the TCP listener in
+/// a separate task.
+pub async fn accept_connections(
+    listener: &mut TcpListener,
+    channels: Arc<Mutex<channel::SenderManager>>,
+) {
+    while let Ok((stream, addr)) = listener.accept().await {
+        // Spawn separate task for handing each connection.
+        tokio::spawn(handle_connection(channels.clone(), stream, addr));
+    }
 }

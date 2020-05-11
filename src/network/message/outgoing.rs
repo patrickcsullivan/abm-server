@@ -7,22 +7,29 @@ use tungstenite::protocol::Message;
 #[derive(Serialize, Debug)]
 pub struct OutgoingMessage {
     pub recipient: SocketAddr,
-    pub cell_updates: Vec<CellUpdate>,
+    pub agent_states: Vec<AgentState>,
 }
 
 #[derive(Serialize, Debug)]
-pub struct CellUpdate {
-    pub x: i32,
-    pub y: i32,
-    pub grass: i32,
+pub struct AgentState {
+    pub position: Option<(f32, f32)>,
+    pub heading: Option<f32>,
 }
 
 impl OutgoingMessage {
-    pub fn new(recipient: SocketAddr, cell_updates: Vec<CellUpdate>) -> OutgoingMessage {
+    pub fn new(recipient: SocketAddr) -> OutgoingMessage {
         OutgoingMessage {
             recipient,
-            cell_updates,
+            agent_states: vec![],
         }
+    }
+
+    pub fn with_agent_state(&mut self, x: f32, y: f32, heading: f32) -> &mut OutgoingMessage {
+        self.agent_states.push(AgentState {
+            position: Some((x, y)),
+            heading: Some(heading),
+        });
+        self
     }
 }
 

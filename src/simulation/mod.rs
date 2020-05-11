@@ -14,43 +14,10 @@ use futures_util::{future, pin_mut, stream::StreamExt};
 use specs::prelude::*;
 use state::State;
 use std::{
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::time::delay_for;
-
-/// Runs the simulation.
-pub async fn run(senders: Arc<Mutex<channel::SenderManager>>) -> Result<(), String> {
-    // Insert the sender part of the simulation's channel into the sender
-    // manager.
-    let (sender, receiver) = unbounded();
-    senders.lock().unwrap().insert_sim_sender(sender);
-
-    // Push messages recieved on the simulation's channel into an inbox buffer.
-    // The simulation loop will forward messages from the inbox buffer into the
-    // inbox ECS resource between frames.
-    let inbox_buffer = Arc::new(Mutex::new(vec![]));
-    let handle_receiver = receiver.for_each(|msg| push_to_inbox_buffer(inbox_buffer.clone(), msg));
-
-    // Run the simulation loop.
-    let mut state = State::new();
-    let sim_loop = async {
-        while let Ok(()) = step(&mut state, inbox_buffer.clone(), senders.clone()).await {}
-    };
-
-    pin_mut!(handle_receiver, sim_loop);
-    future::select(handle_receiver, sim_loop).await;
-    Ok(())
-}
-
-/// Push the incoming message into the inbox buffer.
-async fn push_to_inbox_buffer(
-    inbox_buffer: Arc<Mutex<Vec<network::IncomingMessage>>>,
-    msg: network::IncomingMessage,
-) {
-    inbox_buffer.lock().unwrap().push(msg);
-}
 
 /// Runs a single step of the simulation.
 async fn step(
@@ -76,7 +43,14 @@ async fn step(
         state.world.insert(DeltaFrame::new(0));
     }
 
-    // Forward incoming messaging from the inbox buffer into
+    {
+        // Forward incoming messaging from the inbox buffer into
+        let mut inbox_buffer = inbox_buffer.lock().unwrap();
+        let mut inbox = state.world.fetch_mut::<Vec<network::IncomingMessage>>();
+        while let Some(msg) = inbox_buffer.pop() {
+            inbox.push(msg);
+        }
+    }
 
     // Execute a frame of the simulation.
     state.dispatcher.dispatch(&state.world);
@@ -90,16 +64,37 @@ async fn step(
         senders.send_to_client(msg);
     }
 
-    // // Send updates to interested client handlers.
-    // // TODO: Do this in an ECS system.
-    // let channels = channels.lock().unwrap();
-    // for (addr, region) in client_interests.lock().unwrap().iter() {
-    //     // TODO: Use region to determine what updates to send.
-    //     let msg = channel::ClientHandlerMsg {
-    //         cell_updates: vec![],
-    //     };
-    //     channels. send_to_client(&addr, msg);
-    // }
+    Ok(())
+}
 
+/// Push the incoming message into the inbox buffer.
+async fn push_to_inbox_buffer(
+    inbox_buffer: Arc<Mutex<Vec<network::IncomingMessage>>>,
+    msg: network::IncomingMessage,
+) {
+    inbox_buffer.lock().unwrap().push(msg);
+}
+
+/// Runs the simulation.
+pub async fn run(senders: Arc<Mutex<channel::SenderManager>>) -> Result<(), String> {
+    // Insert the sender part of the simulation's channel into the sender
+    // manager.
+    let (sender, receiver) = unbounded();
+    senders.lock().unwrap().insert_sim_sender(sender);
+
+    // Push messages recieved on the simulation's channel into an inbox buffer.
+    // The simulation loop will forward messages from the inbox buffer into the
+    // inbox ECS resource between frames.
+    let inbox_buffer = Arc::new(Mutex::new(vec![]));
+    let handle_receiver = receiver.for_each(|msg| push_to_inbox_buffer(inbox_buffer.clone(), msg));
+
+    // Run the simulation loop.
+    let mut state = State::new();
+    let sim_loop = async {
+        while let Ok(()) = step(&mut state, inbox_buffer.clone(), senders.clone()).await {}
+    };
+
+    pin_mut!(handle_receiver, sim_loop);
+    future::select(handle_receiver, sim_loop).await;
     Ok(())
 }

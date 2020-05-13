@@ -3,140 +3,27 @@ mod component;
 mod frame;
 mod grid;
 mod snapshot;
+mod state;
 mod system;
 
-use super::channel;
-use super::geometry::BoundingBox;
-use command_queue::{CreateSheepCommand, CreateSheepCommandQueue};
+use crate::network;
+use crate::network::channel;
 use frame::{DeltaFrame, Frame};
 use futures_channel::mpsc::unbounded;
 use futures_util::{future, pin_mut, stream::StreamExt};
 use specs::prelude::*;
+use state::State;
 use std::{
-    collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::time::delay_for;
 
-struct State<'a, 'b> {
-    world: World,
-    dispatcher: Dispatcher<'a, 'b>,
-    frame: Option<Frame>,
-}
-
-impl State<'_, '_> {
-    pub fn new() -> Self {
-        // Register components.
-        let mut world = World::new();
-        world.register::<component::Position>();
-        world.register::<component::Heading>();
-        world.register::<component::Velocity>();
-        world.register::<component::SheepBehaviorState>();
-
-        // Set up dispatcher and systems.
-        let mut dispatcher = DispatcherBuilder::new().build();
-        dispatcher.setup(&mut world);
-
-        // Initialize data.
-        State::initialize_cmd_queue(&mut world);
-        State::initialize_snapshots(&mut world);
-
-        // Set up dispatcher and systems.
-        let mut dispatcher = DispatcherBuilder::new()
-            .with(system::DebugLogSystem, "debug_log", &[])
-            .with(
-                system::ResetAllSheepSnapshotSystem,
-                "reset_all_sheep_snapshot",
-                &["debug_log"],
-            )
-            .with(
-                system::AllSheepSnapshotSystem,
-                "all_sheep_snapshot",
-                &["reset_all_sheep_snapshot"],
-            )
-            .with(
-                system::SheepHeadingSystem,
-                "sheep_heading",
-                &["all_sheep_snapshot"],
-            )
-            .with(
-                system::SheepVelocitySystem,
-                "sheep_velocity",
-                &["sheep_heading"],
-            )
-            .with(system::PositionSystem, "position", &["sheep_velocity"])
-            .with(system::CreateCommandSystem, "create_command", &["position"])
-            .build();
-        dispatcher.setup(&mut world);
-
-        State {
-            world,
-            dispatcher,
-            frame: None,
-        }
-    }
-
-    fn initialize_cmd_queue(world: &mut World) {
-        let mut create_cmds = CreateSheepCommandQueue::new();
-        for x in 1..=5 {
-            for y in 1..=5 {
-                create_cmds.push(CreateSheepCommand {
-                    position: component::Position::new((x * 3) as f32, (y * 3) as f32),
-                    heading: component::Heading::new(0.0),
-                    velocity: component::Velocity::new(0.0, 0.0),
-                    behavior: component::SheepBehaviorState::new(component::SheepBehavior::Walking),
-                })
-            }
-        }
-        world.insert(create_cmds);
-    }
-
-    fn initialize_snapshots(world: &mut World) {
-        world.insert(snapshot::AllSheepSnapshot::new(16, 16));
-        world.insert(snapshot::RunningSheepSnapshot::new(16, 16));
-    }
-}
-
-type ClientInterests = HashMap<SocketAddr, BoundingBox>;
-
-/// Runs the simulation.
-pub async fn run(channels: Arc<Mutex<channel::Manager>>) -> Result<(), String> {
-    // Insert the sender part of this channel into the channel manager.
-    let (sender, receiver) = unbounded();
-    channels.lock().unwrap().insert_sim(sender);
-
-    // Keep track of clients' registered areas of interest.
-    let client_interests = Arc::new(Mutex::new(HashMap::new()));
-
-    // Handle messages recieved on the simulation's channel.
-    let handle_receiver =
-        receiver.for_each(|msg| handle_channel_msg(msg, client_interests.clone()));
-
-    // Run the simulation loop.
-    let mut state = State::new();
-    let sim_loop = async {
-        while let Ok(()) = step(&mut state, client_interests.clone(), channels.clone()).await {}
-    };
-
-    pin_mut!(handle_receiver, sim_loop);
-    future::select(handle_receiver, sim_loop).await;
-    Ok(())
-}
-
-/// Handles the incoming message on the simulation channel by registering the
-/// client's interest in an area of the simulation.
-async fn handle_channel_msg(msg: channel::SimMsg, client_interests: Arc<Mutex<ClientInterests>>) {
-    let channel::SimMsg::RegisterInterest(addr, interest) = msg;
-    client_interests.lock().unwrap().insert(addr, interest);
-}
-
 /// Runs a single step of the simulation.
 async fn step(
     state: &mut State<'_, '_>,
-    client_interests: Arc<Mutex<ClientInterests>>,
-    channels: Arc<Mutex<channel::Manager>>,
+    inbox_buffer: Arc<Mutex<Vec<network::IncomingMessage>>>,
+    senders: Arc<Mutex<channel::SenderManager>>,
 ) -> Result<(), String> {
     // Update the frame counter.
     if let Some(frame) = state.frame {
@@ -156,35 +43,58 @@ async fn step(
         state.world.insert(DeltaFrame::new(0));
     }
 
+    {
+        // Forward incoming messaging from the inbox buffer into
+        let mut inbox_buffer = inbox_buffer.lock().unwrap();
+        let mut inbox = state.world.fetch_mut::<Vec<network::IncomingMessage>>();
+        while let Some(msg) = inbox_buffer.pop() {
+            inbox.push(msg);
+        }
+    }
+
+    // Execute a frame of the simulation.
     state.dispatcher.dispatch(&state.world);
     state.world.maintain();
 
-    // // Send updates to interested client handlers.
-    // // TODO: Do this in an ECS system.
-    // let channels = channels.lock().unwrap();
-    // for (addr, region) in client_interests.lock().unwrap().iter() {
-    //     // TODO: Use region to determine what updates to send.
-    //     let msg = channel::ClientHandlerMsg {
-    //         cell_updates: vec![],
-    //     };
-    //     channels.send_to_client_handler(&addr, msg);
-    // }
+    // Send all outgoing messages generated during the frame on the appropriate
+    // client channels.
+    let senders = senders.lock().unwrap();
+    let mut outbox = state.world.fetch_mut::<Vec<network::OutgoingMessage>>();
+    while let Some(msg) = outbox.pop() {
+        senders.send_to_client(msg);
+    }
 
     Ok(())
 }
 
-// fn mock_cell_updates(counter: i32, region: &BoundingBox) -> Vec<channel::CellUpdate> {
-//     let x_min = std::cmp::max(region.x_min as i32, 0);
-//     let x_max = region.x_max as i32;
-//     let y_min = std::cmp::max(region.y_min as i32, 0);
-//     let y_max = region.y_max as i32;
+/// Push the incoming message into the inbox buffer.
+async fn push_to_inbox_buffer(
+    inbox_buffer: Arc<Mutex<Vec<network::IncomingMessage>>>,
+    msg: network::IncomingMessage,
+) {
+    inbox_buffer.lock().unwrap().push(msg);
+}
 
-//     let mut updates = vec![];
-//     for x in x_min..x_max {
-//         for y in y_min..y_max {
-//             let grass = (((x + y) / 10) + (counter / 250)) % 5;
-//             updates.push(channel::CellUpdate { x, y, grass });
-//         }
-//     }
-//     updates
-// }
+/// Runs the simulation.
+pub async fn run(senders: Arc<Mutex<channel::SenderManager>>) -> Result<(), String> {
+    // Insert the sender part of the simulation's channel into the sender
+    // manager.
+    let (sender, receiver) = unbounded();
+    senders.lock().unwrap().insert_sim_sender(sender);
+
+    // Push messages recieved on the simulation's channel into an inbox buffer.
+    // The simulation loop will forward messages from the inbox buffer into the
+    // inbox ECS resource between frames.
+    let inbox_buffer = Arc::new(Mutex::new(vec![]));
+    let handle_receiver = receiver.for_each(|msg| push_to_inbox_buffer(inbox_buffer.clone(), msg));
+
+    // Run the simulation loop.
+    let mut state = State::new();
+    let sim_loop = async {
+        while let Ok(()) = step(&mut state, inbox_buffer.clone(), senders.clone()).await {}
+    };
+
+    pin_mut!(handle_receiver, sim_loop);
+    future::select(handle_receiver, sim_loop).await;
+    Ok(())
+}

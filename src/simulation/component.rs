@@ -1,6 +1,18 @@
 use nalgebra::{Rotation2, Vector2};
 use specs::{prelude::*, Component};
 use specs_derive::Component;
+use std::net::SocketAddr;
+
+#[derive(Clone, Copy, Component, Debug)]
+pub struct Socket {
+    pub addr: SocketAddr,
+}
+
+impl Socket {
+    pub fn new(addr: SocketAddr) -> Socket {
+        Socket { addr }
+    }
+}
 
 /// Position in meters.
 #[derive(Clone, Copy, Component, Debug)]

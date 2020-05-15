@@ -2,7 +2,10 @@ use super::{
     command_queue::{CreateSheepCommand, CreateSheepCommandQueue},
     component,
     frame::Frame,
-    network, snapshot, system,
+    grid::CellBlockBuilder,
+    network,
+    snapshot::{AllSheepSnapshot, RunningSheepSnapshot},
+    system,
 };
 use specs::prelude::*;
 
@@ -96,7 +99,7 @@ impl State<'_, '_> {
     }
 
     fn initialize_snapshots(world: &mut World) {
-        world.insert(snapshot::AllSheepSnapshot::new(16, 16));
-        world.insert(snapshot::RunningSheepSnapshot::new(16, 16));
+        world.insert(CellBlockBuilder::new(16, 16, AllSheepSnapshot::default()).finish());
+        world.insert(CellBlockBuilder::new(16, 16, RunningSheepSnapshot::default()).finish());
     }
 }

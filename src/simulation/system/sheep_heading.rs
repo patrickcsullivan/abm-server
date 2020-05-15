@@ -1,6 +1,6 @@
 use crate::simulation::component::{Heading, Position, SheepBehavior, SheepBehaviorState};
-use crate::simulation::grid::Grid;
-use crate::simulation::snapshot::{AllSheepSnapshot, AllSheepSnapshotCell};
+use crate::simulation::grid::{CellBlock, Grid};
+use crate::simulation::snapshot::AllSheepSnapshot;
 use nalgebra::{Rotation2, Vector2};
 use rand::distributions::{Distribution, Uniform};
 use specs::prelude::*;
@@ -10,14 +10,14 @@ pub struct SheepHeadingSystem;
 impl<'a> System<'a> for SheepHeadingSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
-        ReadExpect<'a, AllSheepSnapshot>,
+        ReadExpect<'a, CellBlock<AllSheepSnapshot>>,
         ReadStorage<'a, Position>,
         ReadStorage<'a, SheepBehaviorState>,
         WriteStorage<'a, Heading>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (snapshot_rsrc, pos_storage, behavior_storage, mut heading_storage) = data;
+        let (sheep_snapshots, pos_storage, behavior_storage, mut heading_storage) = data;
 
         for (pos, behavior, mut heading) in
             (&pos_storage, &behavior_storage, &mut heading_storage).join()
@@ -25,7 +25,7 @@ impl<'a> System<'a> for SheepHeadingSystem {
             match behavior.behavior {
                 SheepBehavior::Stationary => {}
                 SheepBehavior::Walking => {
-                    heading.r = new_walking_heading(heading.r, pos.v, &snapshot_rsrc);
+                    heading.r = new_walking_heading(heading.r, pos.v, &sheep_snapshots);
                 }
                 SheepBehavior::Running => {}
             }
@@ -36,15 +36,15 @@ impl<'a> System<'a> for SheepHeadingSystem {
 fn new_walking_heading(
     curr_heading: Rotation2<f32>,
     pos: Vector2<f32>,
-    snapshot: &AllSheepSnapshot,
+    sheep_snapshots: &CellBlock<AllSheepSnapshot>,
 ) -> Rotation2<f32> {
     // TODO: Clean up.
     let grid_pos = (pos.x as usize % 5, pos.y as usize % 5);
-    let cell = snapshot.grid.at(grid_pos);
+    let cell = sheep_snapshots.at(grid_pos);
 
     // Get the mean heading from current cell.
     let next_without_noise = match cell {
-        Some(AllSheepSnapshotCell {
+        Some(AllSheepSnapshot {
             heading_sum: h_sum, ..
         }) if h_sum.magnitude() > 0.1 => Rotation2::rotation_between(&Vector2::x(), h_sum),
         _ => curr_heading,

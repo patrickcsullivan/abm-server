@@ -3,6 +3,9 @@ use nalgebra::Vector2;
 /// Snapshot of information about all sheep in a cell.
 #[derive(Clone, Copy, Debug)]
 pub struct AnySheepSnapshot {
+    /// The number of all sheep in the cell.
+    pub count: u16,
+
     /// The sum of heading vectors for all sheep in the cell.
     pub heading_sum: Vector2<f32>,
 }
@@ -10,6 +13,7 @@ pub struct AnySheepSnapshot {
 impl Default for AnySheepSnapshot {
     fn default() -> AnySheepSnapshot {
         AnySheepSnapshot {
+            count: 0,
             heading_sum: nalgebra::zero(),
         }
     }

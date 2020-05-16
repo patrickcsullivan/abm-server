@@ -25,6 +25,7 @@ impl<'a> System<'a> for AnySheepSnapshotSystem {
             let new_cell = snapshots.at(grid_pos).map(|c| {
                 let heading_vec = heading.r * Vector2::x();
                 AnySheepSnapshot {
+                    count: c.count + 1,
                     heading_sum: c.heading_sum + heading_vec,
                 }
             });

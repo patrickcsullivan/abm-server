@@ -2,7 +2,10 @@ use crate::simulation::{
     component::{Position, SheepBehavior, SheepBehaviorState},
     frame::{DeltaFrame, Frame},
     grid::{CellBlock, Grid},
-    snapshot::{RunningSheepSnapshot, StationarySheepSnapshot, WalkingSheepSnapshot},
+    snapshot::{
+        AnySheepSnapshot, RunningSheepSnapshot, RunningToStationarySheepSnapshot,
+        StationarySheepSnapshot, WalkingSheepSnapshot,
+    },
 };
 use nalgebra::Vector2;
 use rand::prelude::*;
@@ -14,7 +17,9 @@ impl<'a> System<'a> for SheepBehaviorSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
         ReadExpect<'a, DeltaFrame>,
+        ReadExpect<'a, CellBlock<AnySheepSnapshot>>,
         ReadExpect<'a, CellBlock<RunningSheepSnapshot>>,
+        ReadExpect<'a, CellBlock<RunningToStationarySheepSnapshot>>,
         ReadExpect<'a, CellBlock<StationarySheepSnapshot>>,
         ReadExpect<'a, CellBlock<WalkingSheepSnapshot>>,
         ReadStorage<'a, Position>,
@@ -24,7 +29,9 @@ impl<'a> System<'a> for SheepBehaviorSystem {
     fn run(&mut self, data: Self::SystemData) {
         let (
             df,
+            any_sheep_snapshots,
             running_snapshots,
+            running_to_stationary_snapshots,
             stationary_snapshots,
             walking_snapshots,
             pos_storage,
@@ -37,7 +44,7 @@ impl<'a> System<'a> for SheepBehaviorSystem {
             if delta_millis >= behavior.next_check_millis {
                 behavior.behavior = match behavior.behavior {
                     SheepBehavior::Stationary { .. } => {
-                        if is_to_running() {
+                        if is_to_running(pos.v, &*any_sheep_snapshots) {
                             SheepBehavior::Running
                         } else if is_stationary_to_walking(pos.v, &*walking_snapshots) {
                             SheepBehavior::Walking
@@ -49,7 +56,7 @@ impl<'a> System<'a> for SheepBehaviorSystem {
                         }
                     }
                     SheepBehavior::Walking => {
-                        if is_to_running() {
+                        if is_to_running(pos.v, &*any_sheep_snapshots) {
                             SheepBehavior::Running
                         } else if is_walking_to_stationary(pos.v, &*stationary_snapshots) {
                             SheepBehavior::Stationary {
@@ -61,7 +68,11 @@ impl<'a> System<'a> for SheepBehaviorSystem {
                         }
                     }
                     SheepBehavior::Running => {
-                        if is_running_to_stationary() {
+                        if is_running_to_stationary(
+                            pos.v,
+                            &*any_sheep_snapshots,
+                            &*running_to_stationary_snapshots,
+                        ) {
                             SheepBehavior::Stationary {
                                 was_running_last_update: true,
                             }
@@ -79,7 +90,9 @@ impl<'a> System<'a> for SheepBehaviorSystem {
     }
 }
 
-const MIMETIC_EFFECT: f32 = 15.0;
+/// A constant paramter that affects the likely of a sheep to transition to the
+/// same behavior state as nearby sheep.
+const BEHAVIOR_MIMETIC_EFFECT: f32 = 15.0;
 
 fn is_stationary_to_walking(
     pos: Vector2<f32>,
@@ -99,7 +112,8 @@ fn is_stationary_to_walking(
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 35.0; // seconds
-    let p = (1.0 + MIMETIC_EFFECT * walking_metric_neighbor_count) / SPONTANEOUS_TRANS_TIME;
+    let p =
+        (1.0 + BEHAVIOR_MIMETIC_EFFECT * walking_metric_neighbor_count) / SPONTANEOUS_TRANS_TIME;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p
@@ -123,18 +137,35 @@ fn is_walking_to_stationary(
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 8.0; // seconds
-    let p = (1.0 + MIMETIC_EFFECT * stationary_metric_neighbor_count) / SPONTANEOUS_TRANS_TIME;
+    let p =
+        (1.0 + BEHAVIOR_MIMETIC_EFFECT * stationary_metric_neighbor_count) / SPONTANEOUS_TRANS_TIME;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p
 }
 
-fn is_to_running() -> bool {
+fn is_to_running(pos: Vector2<f32>, any_sheep_snapshots: &CellBlock<AnySheepSnapshot>) -> bool {
+    // TODO: extra logic
+
+    // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // seconds
-    false
+    let p = 1.0 / SPONTANEOUS_TRANS_TIME;
+
+    let mut rng = rand::thread_rng();
+    rng.gen::<f32>() < p
 }
 
-fn is_running_to_stationary() -> bool {
+fn is_running_to_stationary(
+    pos: Vector2<f32>,
+    any_sheep_snapshots: &CellBlock<AnySheepSnapshot>,
+    running_to_stationary_sheep_snapshots: &CellBlock<RunningToStationarySheepSnapshot>,
+) -> bool {
+    // TODO: extra logic
+
+    // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // seconds
-    false
+    let p = 1.0 / SPONTANEOUS_TRANS_TIME;
+
+    let mut rng = rand::thread_rng();
+    rng.gen::<f32>() < p
 }

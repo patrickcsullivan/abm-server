@@ -59,7 +59,11 @@ impl Velocity {
 /// Types of sheep behavior.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SheepBehavior {
-    Stationary,
+    /// Indicates that the sheep is stationary and whether or not it was running
+    /// immediately before the most recent behavior update.
+    Stationary {
+        was_running_last_update: bool,
+    },
     Walking,
     Running,
 }
@@ -68,11 +72,11 @@ pub enum SheepBehavior {
 #[derive(Clone, Copy, Component, Debug)]
 pub struct SheepBehaviorState {
     pub behavior: SheepBehavior,
-    pub next_check_millis: u64,
+    pub next_check_millis: u16,
 }
 
 impl SheepBehaviorState {
-    pub const CHECK_PERIOD_MILLIS: u64 = 1000;
+    pub const CHECK_PERIOD_MILLIS: u16 = 1000;
 
     pub fn new(behavior: SheepBehavior) -> SheepBehaviorState {
         SheepBehaviorState {

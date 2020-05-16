@@ -23,7 +23,7 @@ impl<'a> System<'a> for SheepHeadingSystem {
             (&pos_storage, &behavior_storage, &mut heading_storage).join()
         {
             match behavior.behavior {
-                SheepBehavior::Stationary => {}
+                SheepBehavior::Stationary { .. } => {}
                 SheepBehavior::Walking => {
                     heading.r = new_walking_heading(heading.r, pos.v, &sheep_snapshots);
                 }

@@ -21,7 +21,7 @@ impl<'a> System<'a> for StationarySheepSnapshotSystem {
         *snapshots = CellBlockBuilder::new(16, 16, StationarySheepSnapshot::default()).finish();
 
         for (behavior, pos) in (&behavior_storage, &pos_storage).join() {
-            if behavior.behavior == SheepBehavior::Stationary {
+            if let SheepBehavior::Stationary { .. } = behavior.behavior {
                 let grid_pos = (pos.v.x as usize % 5, pos.v.y as usize % 5);
                 let new_cell = snapshots
                     .at(grid_pos)

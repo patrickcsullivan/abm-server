@@ -1,16 +1,16 @@
 use crate::simulation::{
     component::{Position, SheepBehavior, SheepBehaviorState},
     grid::{CellBlock, CellBlockBuilder, Grid},
-    snapshot::StationarySheepSnapshot,
+    snapshot::RunningToStationarySheepSnapshot,
 };
 use specs::prelude::*;
 
-pub struct StationarySheepSnapshotSystem;
+pub struct RunningToStationarySheepSnapshotSystem;
 
-impl<'a> System<'a> for StationarySheepSnapshotSystem {
+impl<'a> System<'a> for RunningToStationarySheepSnapshotSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
-        WriteExpect<'a, CellBlock<StationarySheepSnapshot>>,
+        WriteExpect<'a, CellBlock<RunningToStationarySheepSnapshot>>,
         ReadStorage<'a, SheepBehaviorState>,
         ReadStorage<'a, Position>,
     );
@@ -18,15 +18,18 @@ impl<'a> System<'a> for StationarySheepSnapshotSystem {
     fn run(&mut self, data: Self::SystemData) {
         let (mut snapshots, behavior_storage, pos_storage) = data;
         // TODO: Implement and use a mutable CellBolock iterator. Don't take width and height params.
-        *snapshots = CellBlockBuilder::new(16, 16, StationarySheepSnapshot::default()).finish();
+        *snapshots =
+            CellBlockBuilder::new(16, 16, RunningToStationarySheepSnapshot::default()).finish();
 
         for (behavior, pos) in (&behavior_storage, &pos_storage).join() {
-            // TODO: Check if sheep has stopped recently after running.
-            if behavior.behavior == SheepBehavior::Stationary {
+            if let SheepBehavior::Stationary {
+                was_running_last_update: true,
+            } = behavior.behavior
+            {
                 let grid_pos = (pos.v.x as usize % 5, pos.v.y as usize % 5);
                 let new_cell = snapshots
                     .at(grid_pos)
-                    .map(|c| StationarySheepSnapshot { count: c.count + 1 });
+                    .map(|c| RunningToStationarySheepSnapshot { count: c.count + 1 });
                 if let Some(new_cell) = new_cell {
                     snapshots.set(grid_pos, new_cell);
                 }

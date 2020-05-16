@@ -22,29 +22,45 @@ impl<'a> System<'a> for SheepBehaviorSystem {
         let (df, running_snapshots, pos_storage, mut behavior_storage) = data;
 
         for (pos, mut behavior) in (&pos_storage, &mut behavior_storage).join() {
-            let delta_millis = df.delta * Frame::DURATION_MILLIS;
+            // WARNING: This will panic if a frame takes more than 65535 ms.
+            let delta_millis = (df.delta * Frame::DURATION_MILLIS) as u16;
             if delta_millis >= behavior.next_check_millis {
-                match behavior.behavior {
-                    SheepBehavior::Stationary => {
+                behavior.behavior = match behavior.behavior {
+                    SheepBehavior::Stationary { .. } => {
                         if is_to_running() {
-                            behavior.behavior = SheepBehavior::Running;
+                            SheepBehavior::Running
                         } else if is_stationary_to_walking() {
-                            behavior.behavior = SheepBehavior::Walking;
+                            SheepBehavior::Walking
+                        } else {
+                            // Remain stationary.
+                            SheepBehavior::Stationary {
+                                was_running_last_update: false,
+                            }
                         }
                     }
                     SheepBehavior::Walking => {
                         if is_to_running() {
-                            behavior.behavior = SheepBehavior::Running;
+                            SheepBehavior::Running
                         } else if is_walking_to_stationary() {
-                            behavior.behavior = SheepBehavior::Walking;
+                            SheepBehavior::Stationary {
+                                was_running_last_update: false,
+                            }
+                        } else {
+                            // Keep walking.
+                            behavior.behavior
                         }
                     }
                     SheepBehavior::Running => {
                         if is_running_to_stationary() {
-                            behavior.behavior = SheepBehavior::Stationary;
+                            SheepBehavior::Stationary {
+                                was_running_last_update: true,
+                            }
+                        } else {
+                            // Keep running.
+                            behavior.behavior
                         }
                     }
-                }
+                };
                 behavior.next_check_millis = SheepBehaviorState::CHECK_PERIOD_MILLIS;
             } else {
                 behavior.next_check_millis -= delta_millis;

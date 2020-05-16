@@ -19,7 +19,7 @@ impl<'a> System<'a> for SheepVelocitySystem {
             (&behavior_storage, &heading_storage, &mut velocity_storage).join()
         {
             vel.v = match behavior.behavior {
-                SheepBehavior::Stationary => nalgebra::zero(),
+                SheepBehavior::Stationary { .. } => nalgebra::zero(),
                 SheepBehavior::Walking => heading.r * (Vector2::x() * 0.15),
                 SheepBehavior::Running => heading.r * (Vector2::x() * 1.5),
             }

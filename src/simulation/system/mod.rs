@@ -16,4 +16,7 @@ pub use position::PositionSystem;
 pub use sheep_behavior::SheepBehaviorSystem;
 pub use sheep_heading::SheepHeadingSystem;
 pub use sheep_velocity::SheepVelocitySystem;
-pub use snapshot::AnySheepSnapshotSystem;
+pub use snapshot::{
+    AnySheepSnapshotSystem, RunningSheepSnapshotSystem, RunningToStationarySheepSnapshotSystem,
+    StationarySheepSnapshotSystem, WalkingSheepSnapshotSystem,
+};

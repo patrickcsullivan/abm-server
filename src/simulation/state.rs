@@ -4,7 +4,10 @@ use super::{
     frame::Frame,
     grid::CellBlockBuilder,
     network,
-    snapshot::{AnySheepSnapshot, RunningSheepSnapshot},
+    snapshot::{
+        AnySheepSnapshot, RunningSheepSnapshot, RunningToStationarySheepSnapshot,
+        StationarySheepSnapshot, WalkingSheepSnapshot,
+    },
     system,
 };
 use specs::prelude::*;
@@ -44,11 +47,37 @@ impl State<'_, '_> {
                 "any_sheep_snapshot",
                 &["create_port"],
             )
+            .with(
+                system::RunningSheepSnapshotSystem,
+                "running_sheep_snapshot",
+                &["create_port"],
+            )
+            .with(
+                system::RunningToStationarySheepSnapshotSystem,
+                "running_to_stationary_sheep_snapshot",
+                &["create_port"],
+            )
+            .with(
+                system::StationarySheepSnapshotSystem,
+                "stationary_sheep_snapshot",
+                &["create_port"],
+            )
+            .with(
+                system::WalkingSheepSnapshotSystem,
+                "walking_sheep_snapshot",
+                &["create_port"],
+            )
             // Update components.
             .with(
                 system::SheepHeadingSystem,
                 "sheep_heading",
-                &["any_sheep_snapshot"],
+                &[
+                    "any_sheep_snapshot",
+                    "running_sheep_snapshot",
+                    "running_to_stationary_sheep_snapshot",
+                    "stationary_sheep_snapshot",
+                    "walking_sheep_snapshot",
+                ],
             )
             .with(
                 system::SheepVelocitySystem,
@@ -96,5 +125,10 @@ impl State<'_, '_> {
     fn initialize_snapshots(world: &mut World) {
         world.insert(CellBlockBuilder::new(16, 16, AnySheepSnapshot::default()).finish());
         world.insert(CellBlockBuilder::new(16, 16, RunningSheepSnapshot::default()).finish());
+        world.insert(
+            CellBlockBuilder::new(16, 16, RunningToStationarySheepSnapshot::default()).finish(),
+        );
+        world.insert(CellBlockBuilder::new(16, 16, StationarySheepSnapshot::default()).finish());
+        world.insert(CellBlockBuilder::new(16, 16, WalkingSheepSnapshot::default()).finish());
     }
 }

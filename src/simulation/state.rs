@@ -69,8 +69,8 @@ impl State<'_, '_> {
             )
             // Update components.
             .with(
-                system::SheepHeadingSystem,
-                "sheep_heading",
+                system::SheepBehaviorSystem,
+                "sheep_behavior",
                 &[
                     "any_sheep_snapshot",
                     "running_sheep_snapshot",
@@ -78,6 +78,11 @@ impl State<'_, '_> {
                     "stationary_sheep_snapshot",
                     "walking_sheep_snapshot",
                 ],
+            )
+            .with(
+                system::SheepHeadingSystem,
+                "sheep_heading",
+                &["sheep_behavior"],
             )
             .with(
                 system::SheepVelocitySystem,

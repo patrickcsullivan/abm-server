@@ -68,10 +68,16 @@ pub enum SheepBehavior {
 #[derive(Clone, Copy, Component, Debug)]
 pub struct SheepBehaviorState {
     pub behavior: SheepBehavior,
+    pub next_check_millis: u64,
 }
 
 impl SheepBehaviorState {
+    pub const CHECK_PERIOD_MILLIS: u64 = 1000;
+
     pub fn new(behavior: SheepBehavior) -> SheepBehaviorState {
-        SheepBehaviorState { behavior }
+        SheepBehaviorState {
+            behavior,
+            next_check_millis: SheepBehaviorState::CHECK_PERIOD_MILLIS,
+        }
     }
 }

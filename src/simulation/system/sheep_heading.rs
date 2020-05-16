@@ -1,6 +1,6 @@
 use crate::simulation::component::{Heading, Position, SheepBehavior, SheepBehaviorState};
 use crate::simulation::grid::{CellBlock, Grid};
-use crate::simulation::snapshot::AllSheepSnapshot;
+use crate::simulation::snapshot::AnySheepSnapshot;
 use nalgebra::{Rotation2, Vector2};
 use rand::distributions::{Distribution, Uniform};
 use specs::prelude::*;
@@ -10,7 +10,7 @@ pub struct SheepHeadingSystem;
 impl<'a> System<'a> for SheepHeadingSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
-        ReadExpect<'a, CellBlock<AllSheepSnapshot>>,
+        ReadExpect<'a, CellBlock<AnySheepSnapshot>>,
         ReadStorage<'a, Position>,
         ReadStorage<'a, SheepBehaviorState>,
         WriteStorage<'a, Heading>,
@@ -36,7 +36,7 @@ impl<'a> System<'a> for SheepHeadingSystem {
 fn new_walking_heading(
     curr_heading: Rotation2<f32>,
     pos: Vector2<f32>,
-    sheep_snapshots: &CellBlock<AllSheepSnapshot>,
+    sheep_snapshots: &CellBlock<AnySheepSnapshot>,
 ) -> Rotation2<f32> {
     // TODO: Clean up.
     let grid_pos = (pos.x as usize % 5, pos.y as usize % 5);
@@ -44,7 +44,7 @@ fn new_walking_heading(
 
     // Get the mean heading from current cell.
     let next_without_noise = match cell {
-        Some(AllSheepSnapshot {
+        Some(AnySheepSnapshot {
             heading_sum: h_sum, ..
         }) if h_sum.magnitude() > 0.1 => Rotation2::rotation_between(&Vector2::x(), h_sum),
         _ => curr_heading,

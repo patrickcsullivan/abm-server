@@ -4,7 +4,7 @@ use super::{
     frame::Frame,
     grid::CellBlockBuilder,
     network,
-    snapshot::{AllSheepSnapshot, RunningSheepSnapshot},
+    snapshot::{AnySheepSnapshot, RunningSheepSnapshot},
     system,
 };
 use specs::prelude::*;
@@ -38,22 +38,17 @@ impl State<'_, '_> {
             .with(system::DebugLogSystem, "debug_log", &[])
             // Process messages from inbox.
             .with(system::CreateSocketSystem, "create_port", &["debug_log"])
-            // Take snapshots.
+            // Reset and capture snapshots.
             .with(
-                system::ResetAllSheepSnapshotSystem,
-                "reset_all_sheep_snapshot",
+                system::AnySheepSnapshotSystem,
+                "any_sheep_snapshot",
                 &["create_port"],
-            )
-            .with(
-                system::AllSheepSnapshotSystem,
-                "all_sheep_snapshot",
-                &["reset_all_sheep_snapshot"],
             )
             // Update components.
             .with(
                 system::SheepHeadingSystem,
                 "sheep_heading",
-                &["all_sheep_snapshot"],
+                &["any_sheep_snapshot"],
             )
             .with(
                 system::SheepVelocitySystem,
@@ -99,7 +94,7 @@ impl State<'_, '_> {
     }
 
     fn initialize_snapshots(world: &mut World) {
-        world.insert(CellBlockBuilder::new(16, 16, AllSheepSnapshot::default()).finish());
+        world.insert(CellBlockBuilder::new(16, 16, AnySheepSnapshot::default()).finish());
         world.insert(CellBlockBuilder::new(16, 16, RunningSheepSnapshot::default()).finish());
     }
 }

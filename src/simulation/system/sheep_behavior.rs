@@ -1,7 +1,9 @@
-use crate::simulation::component::{Heading, Position, SheepBehavior, SheepBehaviorState};
-use crate::simulation::grid::CellBlock;
-use crate::simulation::snapshot::RunningSheepSnapshot;
-use nalgebra::{Rotation2, Vector2};
+use crate::simulation::{
+    component::{Position, SheepBehavior, SheepBehaviorState},
+    frame::{DeltaFrame, Frame},
+    grid::CellBlock,
+    snapshot::RunningSheepSnapshot,
+};
 use rand::distributions::{Distribution, Uniform};
 use specs::prelude::*;
 
@@ -10,19 +12,42 @@ pub struct SheepBehaviorSystem;
 impl<'a> System<'a> for SheepBehaviorSystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
+        ReadExpect<'a, DeltaFrame>,
         ReadExpect<'a, CellBlock<RunningSheepSnapshot>>,
         ReadStorage<'a, Position>,
         WriteStorage<'a, SheepBehaviorState>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (running_snapshots, pos_storage, mut behavior_storage) = data;
+        let (df, running_snapshots, pos_storage, mut behavior_storage) = data;
 
         for (pos, mut behavior) in (&pos_storage, &mut behavior_storage).join() {
-            match behavior.behavior {
-                SheepBehavior::Stationary => {}
-                SheepBehavior::Walking => {}
-                SheepBehavior::Running => {}
+            let delta_millis = df.delta * Frame::DURATION_MILLIS;
+            if delta_millis >= behavior.next_check_millis {
+                match behavior.behavior {
+                    SheepBehavior::Stationary => {
+                        if is_to_running() {
+                            behavior.behavior = SheepBehavior::Running;
+                        } else if is_stationary_to_walking() {
+                            behavior.behavior = SheepBehavior::Walking;
+                        }
+                    }
+                    SheepBehavior::Walking => {
+                        if is_to_running() {
+                            behavior.behavior = SheepBehavior::Running;
+                        } else if is_walking_to_stationary() {
+                            behavior.behavior = SheepBehavior::Walking;
+                        }
+                    }
+                    SheepBehavior::Running => {
+                        if is_running_to_stationary() {
+                            behavior.behavior = SheepBehavior::Stationary;
+                        }
+                    }
+                }
+                behavior.next_check_millis = SheepBehaviorState::CHECK_PERIOD_MILLIS;
+            } else {
+                behavior.next_check_millis -= delta_millis;
             }
         }
     }

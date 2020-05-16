@@ -1,5 +1,5 @@
 use crate::network;
-use crate::simulation::component::{Heading, Position, Socket};
+use crate::simulation::component::{Heading, Position, SheepBehavior, SheepBehaviorState, Socket};
 use specs::prelude::*;
 
 pub struct OutboxSystem;
@@ -12,17 +12,26 @@ impl<'a> System<'a> for OutboxSystem {
         ReadStorage<'a, Socket>,
         ReadStorage<'a, Position>,
         ReadStorage<'a, Heading>,
+        ReadStorage<'a, SheepBehaviorState>,
     );
 
     fn run(&mut self, data: Self::SystemData) {
-        let (mut outbox, entities, socket_storage, pos_storage, heading_storage) = data;
+        let (mut outbox, entities, socket_storage, pos_storage, heading_storage, behavior_storage) =
+            data;
 
         // FIXME: This will be inefficent with >1 client since we'll loop
         // through all entities for each client. See below for better solution.
         for socket in socket_storage.join() {
             let mut msg = network::OutgoingMessage::new(socket.addr);
-            for (pos, heading) in (&pos_storage, &heading_storage).join() {
-                msg.with_agent_state(pos.v.x, pos.v.y, heading.r.angle());
+            for (pos, heading, behavior) in
+                (&pos_storage, &heading_storage, &behavior_storage).join()
+            {
+                msg.with_agent_state(
+                    pos.v.x,
+                    pos.v.y,
+                    heading.r.angle(),
+                    encode_behavior(behavior.behavior),
+                );
             }
             outbox.push(msg);
         }
@@ -38,5 +47,13 @@ impl<'a> System<'a> for OutboxSystem {
         //     // logic to the outbox so that a new message added to the same
         //     // sender are packed and sent together as a single message.
         // }
+    }
+}
+
+fn encode_behavior(behavior: SheepBehavior) -> u8 {
+    match behavior {
+        SheepBehavior::Stationary { .. } => 0,
+        SheepBehavior::Walking => 1,
+        SheepBehavior::Running => 2,
     }
 }

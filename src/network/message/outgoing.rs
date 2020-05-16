@@ -14,6 +14,7 @@ pub struct OutgoingMessage {
 pub struct AgentState {
     pub position: Option<(f32, f32)>,
     pub heading: Option<f32>,
+    pub behavior: Option<u8>,
 }
 
 impl OutgoingMessage {
@@ -24,10 +25,17 @@ impl OutgoingMessage {
         }
     }
 
-    pub fn with_agent_state(&mut self, x: f32, y: f32, heading: f32) -> &mut OutgoingMessage {
+    pub fn with_agent_state(
+        &mut self,
+        x: f32,
+        y: f32,
+        heading: f32,
+        behavior: u8,
+    ) -> &mut OutgoingMessage {
         self.agent_states.push(AgentState {
             position: Some((x, y)),
             heading: Some(heading),
+            behavior: Some(behavior),
         });
         self
     }

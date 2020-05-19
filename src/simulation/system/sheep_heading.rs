@@ -4,7 +4,10 @@ use crate::simulation::{
     snapshot::{AnySheepSnapshot, RunningSheepSnapshot},
 };
 use nalgebra::{Rotation2, Vector2};
-use rand::distributions::{Distribution, Uniform};
+use rand::{
+    distributions::{Distribution, Uniform},
+    prelude::*,
+};
 use specs::prelude::*;
 
 pub struct SheepHeadingSystem;
@@ -88,11 +91,16 @@ fn new_running_heading(
         pos == grid_pos && cell.count > 1 || pos != grid_pos && cell.count > 0
     });
 
+    let mut rng = rand::thread_rng();
+
     let heading_vec: Vector2<f32> = vn.fold(nalgebra::zero(), |accum, ((x, y), snapshot)| {
         let alignmnet_component =
             ALIGNMENT_MIMETIC_EFFECT / snapshot.count as f32 * snapshot.heading_sum;
-
-        let cell_center = Vector2::new((x * 5) as f32 + 2.5, (y * 5) as f32 + 2.5);
+        let cell_center = Vector2::new(
+            (x * 5) as f32 + rng.gen::<f32>() * 5.0,
+            (y * 5) as f32 + rng.gen::<f32>() * 5.0,
+        );
+        // let cell_center = Vector2::new((x * 5) as f32 + 2.5, (y * 5) as f32 + 2.5);
         let pos_to_cell = cell_center - pos;
         let dist = (pos_to_cell.x * pos_to_cell.x + pos_to_cell.y * pos_to_cell.y).sqrt();
         let eqb_dist_component = EQB_FORCE_STENGTH * equilibrium_force(dist) * pos_to_cell;

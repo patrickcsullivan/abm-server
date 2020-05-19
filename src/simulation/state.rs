@@ -117,13 +117,19 @@ impl State<'_, '_> {
         for x in 1..=5 {
             for y in 1..=5 {
                 create_cmds.push(CreateSheepCommand {
-                    position: component::Position::new((x * 3) as f32, (y * 3) as f32),
+                    position: component::Position::new((x * 4) as f32, (y * 4) as f32),
                     heading: component::Heading::new(0.0),
                     velocity: component::Velocity::new(0.0, 0.0),
                     behavior: component::SheepBehaviorState::new(component::SheepBehavior::Walking),
-                })
+                });
             }
         }
+        create_cmds.push(CreateSheepCommand {
+            position: component::Position::new(64.0, 64.0),
+            heading: component::Heading::new(0.0),
+            velocity: component::Velocity::new(0.0, 0.0),
+            behavior: component::SheepBehaviorState::new(component::SheepBehavior::Walking),
+        });
         world.insert(create_cmds);
     }
 

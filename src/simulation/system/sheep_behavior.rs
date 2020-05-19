@@ -44,7 +44,7 @@ impl<'a> System<'a> for SheepBehaviorSystem {
             if delta_millis >= behavior.next_check_millis {
                 behavior.behavior = match behavior.behavior {
                     SheepBehavior::Stationary { .. } => {
-                        if is_to_running(pos.v, &*any_sheep_snapshots) {
+                        if is_to_running(pos.v, &*any_sheep_snapshots, &*running_snapshots) {
                             SheepBehavior::Running
                         } else if is_stationary_to_walking(pos.v, &*walking_snapshots) {
                             SheepBehavior::Walking
@@ -56,7 +56,7 @@ impl<'a> System<'a> for SheepBehaviorSystem {
                         }
                     }
                     SheepBehavior::Walking => {
-                        if is_to_running(pos.v, &*any_sheep_snapshots) {
+                        if is_to_running(pos.v, &*any_sheep_snapshots, &*running_snapshots) {
                             SheepBehavior::Running
                         } else if is_walking_to_stationary(pos.v, &*stationary_snapshots) {
                             SheepBehavior::Stationary {
@@ -144,12 +144,40 @@ fn is_walking_to_stationary(
     rng.gen::<f32>() < p
 }
 
-fn is_to_running(pos: Vector2<f32>, any_sheep_snapshots: &CellBlock<AnySheepSnapshot>) -> bool {
-    // TODO: extra logic
+fn is_to_running(
+    pos: Vector2<f32>,
+    any_sheep_snapshots: &CellBlock<AnySheepSnapshot>,
+    running_snapshots: &CellBlock<RunningSheepSnapshot>,
+) -> bool {
+    // TODO: Factor out grid_pos calculation.
+    let grid_pos = (pos.x as usize % 5, pos.y as usize % 5);
+
+    let running_count = running_snapshots
+        .visible_neighbors(grid_pos, 8, |pos, cell| {
+            pos == grid_pos && cell.count > 1 || pos != grid_pos && cell.count > 0
+        })
+        .fold(0, |accum, (_, snapshot)| accum + snapshot.count);
+
+    let (neighbor_count, dist_sum) = any_sheep_snapshots
+        .visible_neighbors(grid_pos, 8, |pos, cell| {
+            pos == grid_pos && cell.count > 1 || pos != grid_pos && cell.count > 0
+        })
+        .fold((0, 0.0), |(accum_count, accum_dist), ((x, y), snapshot)| {
+            let cell_center = Vector2::new((x * 5) as f32 + 2.5, (y * 5) as f32 + 2.5);
+            let pos_to_cell = cell_center - pos;
+            let dist = (pos_to_cell.x * pos_to_cell.x + pos_to_cell.y * pos_to_cell.y).sqrt();
+            (accum_count + snapshot.count, accum_dist + dist)
+        });
+    let mean_dist = dist_sum / neighbor_count as f32;
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // seconds
-    let p = 1.0 / SPONTANEOUS_TRANS_TIME;
+    const BEHAVIOR_MIMETIC_EXP: i32 = 4;
+    const CHARACTERISTIC_LEN_SCALE: f32 = 36.0; // meters
+    let p = (mean_dist / CHARACTERISTIC_LEN_SCALE
+        * (1.0 + BEHAVIOR_MIMETIC_EFFECT * running_count as f32))
+        .powi(BEHAVIOR_MIMETIC_EXP)
+        / SPONTANEOUS_TRANS_TIME;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p
@@ -158,13 +186,37 @@ fn is_to_running(pos: Vector2<f32>, any_sheep_snapshots: &CellBlock<AnySheepSnap
 fn is_running_to_stationary(
     pos: Vector2<f32>,
     any_sheep_snapshots: &CellBlock<AnySheepSnapshot>,
-    running_to_stationary_sheep_snapshots: &CellBlock<RunningToStationarySheepSnapshot>,
+    stationary_snapshots: &CellBlock<RunningToStationarySheepSnapshot>,
 ) -> bool {
-    // TODO: extra logic
+    // TODO: Factor out grid_pos calculation.
+    let grid_pos = (pos.x as usize % 5, pos.y as usize % 5);
+
+    let just_stopped_count = stationary_snapshots
+        .visible_neighbors(grid_pos, 8, |pos, cell| {
+            pos == grid_pos && cell.count > 1 || pos != grid_pos && cell.count > 0
+        })
+        .fold(0, |accum, (_, snapshot)| accum + snapshot.count);
+
+    let (neighbor_count, dist_sum) = any_sheep_snapshots
+        .visible_neighbors(grid_pos, 8, |pos, cell| {
+            pos == grid_pos && cell.count > 1 || pos != grid_pos && cell.count > 0
+        })
+        .fold((0, 0.0), |(accum_count, accum_dist), ((x, y), snapshot)| {
+            let cell_center = Vector2::new((x * 5) as f32 + 2.5, (y * 5) as f32 + 2.5);
+            let pos_to_cell = cell_center - pos;
+            let dist = (pos_to_cell.x * pos_to_cell.x + pos_to_cell.y * pos_to_cell.y).sqrt();
+            (accum_count + snapshot.count, accum_dist + dist)
+        });
+    let mean_dist = dist_sum / neighbor_count as f32;
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // seconds
-    let p = 1.0 / SPONTANEOUS_TRANS_TIME;
+    const BEHAVIOR_MIMETIC_EXP: i32 = 4;
+    const CHARACTERISTIC_LEN_SCALE: f32 = 6.3; // meters
+    let p = (CHARACTERISTIC_LEN_SCALE / mean_dist
+        * (1.0 + BEHAVIOR_MIMETIC_EFFECT * just_stopped_count as f32))
+        .powi(BEHAVIOR_MIMETIC_EXP)
+        / SPONTANEOUS_TRANS_TIME;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p

@@ -6,6 +6,8 @@ mod snapshot;
 mod state;
 mod system;
 
+mod entity_position;
+
 use crate::network;
 use crate::network::channel;
 use frame::{DeltaFrame, Frame};

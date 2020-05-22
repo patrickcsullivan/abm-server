@@ -1,12 +1,11 @@
 mod command_queue;
 mod component;
+mod entity_rtree;
 mod frame;
 mod grid;
 mod snapshot;
 mod state;
 mod system;
-
-mod entity_position;
 
 use crate::network;
 use crate::network::channel;

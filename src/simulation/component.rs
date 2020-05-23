@@ -29,7 +29,7 @@ impl Position {
 }
 
 /// Heading rotation.
-#[derive(Clone, Copy, Component, Debug)]
+#[derive(Clone, Copy, Component, Debug, PartialEq)]
 pub struct Heading {
     pub r: Rotation2<f32>,
 }
@@ -43,7 +43,7 @@ impl Heading {
 }
 
 /// Velocity in meters per second.
-#[derive(Clone, Copy, Component, Debug)]
+#[derive(Clone, Copy, Component, Debug, PartialEq)]
 pub struct Velocity {
     pub v: Vector2<f32>,
 }
@@ -69,7 +69,7 @@ pub enum SheepBehavior {
 }
 
 /// Sheep behavior state.
-#[derive(Clone, Copy, Component, Debug)]
+#[derive(Clone, Copy, Component, Debug, PartialEq)]
 pub struct SheepBehaviorState {
     pub behavior: SheepBehavior,
     pub next_check_millis: u16,

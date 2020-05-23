@@ -5,8 +5,8 @@ mod outbox;
 mod position;
 mod sheep_behavior;
 mod sheep_heading;
+mod sheep_rtree;
 mod sheep_velocity;
-mod snapshot;
 
 pub use create_command::CreateCommandSystem;
 pub use create_socket::CreateSocketSystem;
@@ -15,8 +15,5 @@ pub use outbox::OutboxSystem;
 pub use position::PositionSystem;
 pub use sheep_behavior::SheepBehaviorSystem;
 pub use sheep_heading::SheepHeadingSystem;
+pub use sheep_rtree::SheepRTreeSystem;
 pub use sheep_velocity::SheepVelocitySystem;
-pub use snapshot::{
-    AnySheepSnapshotSystem, RunningSheepSnapshotSystem, RunningToStationarySheepSnapshotSystem,
-    StationarySheepSnapshotSystem, WalkingSheepSnapshotSystem,
-};

@@ -3,7 +3,6 @@ mod component;
 mod entity_rtree;
 mod frame;
 mod grid;
-mod snapshot;
 mod state;
 mod system;
 

@@ -1,15 +1,12 @@
+use super::entity_rtree::EntityPosition;
 use super::{
     command_queue::{CreateSheepCommand, CreateSheepCommandQueue},
     component,
     frame::Frame,
     grid::CellBlockBuilder,
-    network,
-    snapshot::{
-        AnySheepSnapshot, RunningSheepSnapshot, RunningToStationarySheepSnapshot,
-        StationarySheepSnapshot, WalkingSheepSnapshot,
-    },
-    system,
+    network, system,
 };
+use spade::rtree::RTree;
 use specs::prelude::*;
 
 pub struct State<'a, 'b> {
@@ -34,50 +31,20 @@ impl State<'_, '_> {
         // Initialize resources.
         State::initialize_mailboxes(&mut world);
         State::initialize_cmd_queue(&mut world);
-        State::initialize_snapshots(&mut world);
+        State::initialize_rtree(&mut world);
 
         // Set up dispatcher and systems.
         let mut dispatcher = DispatcherBuilder::new()
             .with(system::DebugLogSystem, "debug_log", &[])
             // Process messages from inbox.
             .with(system::CreateSocketSystem, "create_port", &["debug_log"])
-            // Reset and capture snapshots.
-            .with(
-                system::AnySheepSnapshotSystem,
-                "any_sheep_snapshot",
-                &["create_port"],
-            )
-            .with(
-                system::RunningSheepSnapshotSystem,
-                "running_sheep_snapshot",
-                &["create_port"],
-            )
-            .with(
-                system::RunningToStationarySheepSnapshotSystem,
-                "running_to_stationary_sheep_snapshot",
-                &["create_port"],
-            )
-            .with(
-                system::StationarySheepSnapshotSystem,
-                "stationary_sheep_snapshot",
-                &["create_port"],
-            )
-            .with(
-                system::WalkingSheepSnapshotSystem,
-                "walking_sheep_snapshot",
-                &["create_port"],
-            )
+            // Clear and rebuild R-tree.
+            .with(system::SheepRTreeSystem, "sheep_rtree", &["create_port"])
             // Update components.
             .with(
                 system::SheepBehaviorSystem,
                 "sheep_behavior",
-                &[
-                    "any_sheep_snapshot",
-                    "running_sheep_snapshot",
-                    "running_to_stationary_sheep_snapshot",
-                    "stationary_sheep_snapshot",
-                    "walking_sheep_snapshot",
-                ],
+                &["sheep_rtree"],
             )
             .with(
                 system::SheepHeadingSystem,
@@ -133,13 +100,7 @@ impl State<'_, '_> {
         world.insert(create_cmds);
     }
 
-    fn initialize_snapshots(world: &mut World) {
-        world.insert(CellBlockBuilder::new(16, 16, AnySheepSnapshot::default()).finish());
-        world.insert(CellBlockBuilder::new(16, 16, RunningSheepSnapshot::default()).finish());
-        world.insert(
-            CellBlockBuilder::new(16, 16, RunningToStationarySheepSnapshot::default()).finish(),
-        );
-        world.insert(CellBlockBuilder::new(16, 16, StationarySheepSnapshot::default()).finish());
-        world.insert(CellBlockBuilder::new(16, 16, WalkingSheepSnapshot::default()).finish());
+    fn initialize_rtree(world: &mut World) {
+        world.insert(RTree::<EntityPosition>::new());
     }
 }

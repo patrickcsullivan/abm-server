@@ -23,49 +23,44 @@ impl<'a> System<'a> for SheepBehaviorSystem {
         let (df, rtree, entities, pos_storage, mut behavior_storage) = data;
 
         for (pos, entity, mut behavior) in (&pos_storage, &entities, &mut behavior_storage).join() {
-            // WARNING: This will panic if a frame takes more than 65535 ms.
-            let delta_millis = (df.delta * Frame::DURATION_MILLIS) as u16;
-            if delta_millis >= behavior.next_check_millis {
-                behavior.behavior = match behavior.behavior {
-                    SheepBehavior::Stationary { .. } => {
-                        if is_to_running(entity, pos.v, &*rtree) {
-                            SheepBehavior::Running
-                        } else if is_stationary_to_walking(pos.v, &*rtree) {
-                            SheepBehavior::Walking
-                        } else {
-                            // Remain stationary.
-                            SheepBehavior::Stationary {
-                                was_running_last_update: false,
-                            }
+            behavior.behavior = match behavior.behavior {
+                SheepBehavior::Stationary {
+                    frames_since_running_to_stationary: f,
+                } => {
+                    if is_to_running(entity, pos.v, &*rtree) {
+                        SheepBehavior::Running
+                    } else if is_stationary_to_walking(pos.v, &*rtree) {
+                        SheepBehavior::Walking
+                    } else {
+                        // Remain stationary.
+                        SheepBehavior::Stationary {
+                            frames_since_running_to_stationary: f.map(|frames| frames + df.delta),
                         }
                     }
-                    SheepBehavior::Walking => {
-                        if is_to_running(entity, pos.v, &*rtree) {
-                            SheepBehavior::Running
-                        } else if is_walking_to_stationary(pos.v, &*rtree) {
-                            SheepBehavior::Stationary {
-                                was_running_last_update: false,
-                            }
-                        } else {
-                            // Keep walking.
-                            behavior.behavior
+                }
+                SheepBehavior::Walking => {
+                    if is_to_running(entity, pos.v, &*rtree) {
+                        SheepBehavior::Running
+                    } else if is_walking_to_stationary(pos.v, &*rtree) {
+                        SheepBehavior::Stationary {
+                            frames_since_running_to_stationary: None,
                         }
+                    } else {
+                        // Keep walking.
+                        behavior.behavior
                     }
-                    SheepBehavior::Running => {
-                        if is_running_to_stationary(entity, pos.v, &*rtree) {
-                            SheepBehavior::Stationary {
-                                was_running_last_update: true,
-                            }
-                        } else {
-                            // Keep running.
-                            behavior.behavior
+                }
+                SheepBehavior::Running => {
+                    if is_running_to_stationary(entity, pos.v, &*rtree) {
+                        SheepBehavior::Stationary {
+                            frames_since_running_to_stationary: Some(0),
                         }
+                    } else {
+                        // Keep running.
+                        behavior.behavior
                     }
-                };
-                behavior.next_check_millis = SheepBehaviorState::CHECK_PERIOD_MILLIS;
-            } else {
-                behavior.next_check_millis -= delta_millis;
-            }
+                }
+            };
         }
     }
 }
@@ -91,6 +86,8 @@ const BEHAVIOR_MIMETIC_EXP: i32 = 4;
 /// characteristic length scale a sheep will be more likely to stop running.
 const CHARACTERISTIC_LEN_SCALE: f32 = 36.0;
 
+const FRAMES_PER_SECOND: f32 = 62.5;
+
 fn is_stationary_to_walking(pos: Vector2<f32>, rtree: &EntityRTree) -> bool {
     // Calculate the number of walking sheep within 1 meter.
     let walking_metric_neighbors: Vec<&EntityPosition> = rtree
@@ -102,7 +99,8 @@ fn is_stationary_to_walking(pos: Vector2<f32>, rtree: &EntityRTree) -> bool {
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 35.0; // seconds
     let p = (1.0 + BEHAVIOR_MIMETIC_EFFECT * walking_metric_neighbors.len() as f32)
-        / SPONTANEOUS_TRANS_TIME;
+        / SPONTANEOUS_TRANS_TIME
+        / FRAMES_PER_SECOND;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p
@@ -125,7 +123,8 @@ fn is_walking_to_stationary(pos: Vector2<f32>, rtree: &EntityRTree) -> bool {
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 8.0; // seconds
     let p = (1.0 + BEHAVIOR_MIMETIC_EFFECT * stationary_metric_neighbors.len() as f32)
-        / SPONTANEOUS_TRANS_TIME;
+        / SPONTANEOUS_TRANS_TIME
+        / FRAMES_PER_SECOND;
 
     let mut rng = rand::thread_rng();
     rng.gen::<f32>() < p
@@ -153,7 +152,7 @@ fn is_to_running(entity: Entity, pos: Vector2<f32>, rtree: &EntityRTree) -> bool
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // N seconds, where N = number of sheep
-    let trans_time_factor = 1.0 / SPONTANEOUS_TRANS_TIME;
+    let trans_time_factor = 1.0 / SPONTANEOUS_TRANS_TIME / FRAMES_PER_SECOND;
     let separation_factor = mean_dist / CHARACTERISTIC_LEN_SCALE;
     let running_neighbors_factor =
         1.0 + BEHAVIOR_MIMETIC_EFFECT * running_natural_neighbors.len() as f32;
@@ -183,10 +182,10 @@ fn is_running_to_stationary(entity: Entity, pos: Vector2<f32>, rtree: &EntityRTr
         .into_iter()
         .filter(|epos| {
             if let SheepBehavior::Stationary {
-                was_running_last_update: true,
+                frames_since_running_to_stationary: Some(f),
             } = epos.behavior.behavior
             {
-                true
+                (f as f32) < FRAMES_PER_SECOND
             } else {
                 false
             }
@@ -195,7 +194,7 @@ fn is_running_to_stationary(entity: Entity, pos: Vector2<f32>, rtree: &EntityRTr
 
     // Calculate probability of transitioning.
     const SPONTANEOUS_TRANS_TIME: f32 = 25.0; // N seconds, where N = number of sheep
-    let trans_time_factor = 1.0 / SPONTANEOUS_TRANS_TIME;
+    let trans_time_factor = 1.0 / SPONTANEOUS_TRANS_TIME / FRAMES_PER_SECOND;
     let proximity_factor = CHARACTERISTIC_LEN_SCALE / mean_dist;
     let running_neighbors_factor =
         1.0 + BEHAVIOR_MIMETIC_EFFECT * stopping_natural_neighbors.len() as f32;

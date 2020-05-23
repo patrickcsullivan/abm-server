@@ -29,7 +29,7 @@ pub struct Frame {
 
 impl Frame {
     /// Duration of a fixed length frame in milliseconds.
-    pub const DURATION_MILLIS: u64 = 32u64; // 16 ms = 62.5 FPS
+    pub const DURATION_MILLIS: u64 = 16u64; // 16 ms = 62.5 FPS
 
     pub fn new() -> Frame {
         let now = Instant::now();

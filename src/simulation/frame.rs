@@ -1,5 +1,13 @@
 use std::time::{Duration, Instant};
 
+/// Ratio of time elapsed in reality to elapsed time modelled in the
+/// simulation. For example if this value is set to 2.0 and one second
+/// passes in reality then 2.0 seconds should elapse in the simulation.  
+pub const REAL_TO_SIM_TIME: f32 = 1.0;
+
+/// Duration of a fixed length frame in milliseconds.
+pub const FRAME_DURATION_MILLIS: u64 = 16u64; // 16 ms = 62.5 FPS
+
 /// The number of frames that have passed since the last simulation.
 #[derive(Clone, Copy, Debug)]
 pub struct DeltaFrame {
@@ -28,9 +36,6 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Duration of a fixed length frame in milliseconds.
-    pub const DURATION_MILLIS: u64 = 16u64; // 16 ms = 62.5 FPS
-
     pub fn new() -> Frame {
         let now = Instant::now();
         Frame {
@@ -42,12 +47,12 @@ impl Frame {
 
     pub fn next(&self, now: Instant) -> Frame {
         let elapsed_frame_count =
-            (now - self.ideal_start_time).as_millis() as u64 / Frame::DURATION_MILLIS;
+            (now - self.ideal_start_time).as_millis() as u64 / FRAME_DURATION_MILLIS;
         Frame {
             number: self.number + elapsed_frame_count,
             start_time: now,
             ideal_start_time: self.ideal_start_time
-                + Duration::from_millis(elapsed_frame_count * Frame::DURATION_MILLIS),
+                + Duration::from_millis(elapsed_frame_count * FRAME_DURATION_MILLIS),
         }
     }
 }

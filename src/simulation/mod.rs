@@ -28,7 +28,7 @@ async fn step(
     // Update the frame counter.
     if let Some(frame) = state.frame {
         // Wait until it's time for the next frame to start.
-        let frame_duration = Duration::from_millis(Frame::DURATION_MILLIS);
+        let frame_duration = Duration::from_millis(frame::FRAME_DURATION_MILLIS);
         let duration_since_prev_ideal = Instant::now() - frame.ideal_start_time;
         if duration_since_prev_ideal < frame_duration {
             delay_for(frame_duration - duration_since_prev_ideal).await;

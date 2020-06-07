@@ -4,6 +4,9 @@ use specs::prelude::*;
 
 pub struct SheepVelocitySystem;
 
+const SHEEP_WALKING_SPEED: f32 = 0.15;
+const SHEEP_RUNNING_SPEED: f32 = 1.5;
+
 impl<'a> System<'a> for SheepVelocitySystem {
     #[allow(clippy::type_complexity)]
     type SystemData = (
@@ -20,8 +23,8 @@ impl<'a> System<'a> for SheepVelocitySystem {
         {
             vel.v = match behavior.behavior {
                 SheepBehavior::Stationary { .. } => nalgebra::zero(),
-                SheepBehavior::Walking => heading.r * (Vector2::x() * 0.15),
-                SheepBehavior::Running => heading.r * (Vector2::x() * 1.5),
+                SheepBehavior::Walking => heading.r * (Vector2::x() * SHEEP_WALKING_SPEED),
+                SheepBehavior::Running => heading.r * (Vector2::x() * SHEEP_RUNNING_SPEED),
             }
         }
     }
